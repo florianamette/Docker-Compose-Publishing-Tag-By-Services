@@ -37,7 +37,7 @@ The action will automatically discover all services in your docker-compose file 
 **For personal accounts** (using personal token and username for both pushing and README updates):
 ```yaml
 - name: Build and push to Docker Hub
-  uses: florianamette/docker-compose-publish-auto-tagging@v1
+  uses: florianamette/docker-compose-publishing-tag-by-services@v1
   with:
     docker_hub_username: ${{ secrets.DOCKER_HUB_USERNAME }}
     docker_hub_personal_token: ${{ secrets.DOCKER_HUB_PERSONAL_TOKEN }}
@@ -48,7 +48,7 @@ The action will automatically discover all services in your docker-compose file 
 **For organizations** (using separate org token and org name):
 ```yaml
 - name: Build and push to Docker Hub
-  uses: florianamette/docker-compose-publish-auto-tagging@v1
+  uses: florianamette/docker-compose-publishing-tag-by-services@v1
   with:
     docker_hub_username: ${{ secrets.DOCKER_HUB_USERNAME }}
     docker_hub_org_name: "myorg"  # Organization name
@@ -87,7 +87,7 @@ jobs:
       - uses: actions/checkout@v3
       
       - name: Build and push to Docker Hub
-        uses: florianamette/docker-compose-publish-auto-tagging@v1
+        uses: florianamette/docker-compose-publishing-tag-by-services@v1
         with:
           docker_hub_username: ${{ secrets.DOCKER_HUB_USERNAME }}
           docker_hub_personal_token: ${{ secrets.DOCKER_HUB_PERSONAL_TOKEN }}
@@ -108,7 +108,7 @@ You can customize the Docker Hub repository name in several ways:
 **Option 1: Full repository path (org/repo-name)**
 ```yaml
 - name: Build and push to Docker Hub
-  uses: florianamette/docker-compose-publish-auto-tagging@v1
+  uses: florianamette/docker-compose-publishing-tag-by-services@v1
   with:
     docker_hub_username: ${{ secrets.DOCKER_HUB_USERNAME }}
     docker_hub_org_token: ${{ secrets.DOCKER_HUB_ORG_TOKEN }}
@@ -118,7 +118,7 @@ You can customize the Docker Hub repository name in several ways:
 **Option 2: Just repository name (uses docker_hub_org_name or docker_hub_username)**
 ```yaml
 - name: Build and push to Docker Hub
-  uses: florianamette/docker-compose-publish-auto-tagging@v1
+  uses: florianamette/docker-compose-publishing-tag-by-services@v1
   with:
     docker_hub_username: ${{ secrets.DOCKER_HUB_USERNAME }}
     docker_hub_personal_token: ${{ secrets.DOCKER_HUB_PERSONAL_TOKEN }}
@@ -128,7 +128,7 @@ You can customize the Docker Hub repository name in several ways:
 **Option 3: Using Docker Hub organization**
 ```yaml
 - name: Build and push to Docker Hub
-  uses: florianamette/docker-compose-publish-auto-tagging@v1
+  uses: florianamette/docker-compose-publishing-tag-by-services@v1
   with:
     docker_hub_username: ${{ secrets.DOCKER_HUB_USERNAME }}
     docker_hub_org_token: ${{ secrets.DOCKER_HUB_ORG_TOKEN }}
@@ -142,7 +142,7 @@ You can use multiple docker-compose files (e.g., using override files for CI):
 
 ```yaml
 - name: Build and push to Docker Hub
-  uses: florianamette/docker-compose-publish-auto-tagging@v1
+  uses: florianamette/docker-compose-publishing-tag-by-services@v1
   with:
     docker_hub_username: ${{ secrets.DOCKER_HUB_USERNAME }}
     docker_hub_org_token: ${{ secrets.DOCKER_HUB_ORG_TOKEN }}
@@ -156,7 +156,7 @@ To automatically update the Docker Hub repository README from a markdown file:
 
 ```yaml
 - name: Build and push to Docker Hub
-  uses: florianamette/docker-compose-publish-auto-tagging@v1
+  uses: florianamette/docker-compose-publishing-tag-by-services@v1
   with:
     docker_hub_username: ${{ secrets.DOCKER_HUB_USERNAME }}
     docker_hub_org_token: ${{ secrets.DOCKER_HUB_ORG_TOKEN }}
@@ -183,7 +183,7 @@ jobs:
       - uses: actions/checkout@v3
       
       - name: Build and push to Docker Hub
-        uses: florianamette/docker-compose-publish-auto-tagging@v1
+        uses: florianamette/docker-compose-publishing-tag-by-services@v1
         with:
           docker_hub_username: ${{ secrets.DOCKER_HUB_USERNAME }}
           docker_hub_personal_token: ${{ secrets.DOCKER_HUB_PERSONAL_TOKEN }}

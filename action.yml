@@ -1,0 +1,243 @@
+# action.yml
+name: "Docker Compose Publish & Auto Tagging"
+author: "Florian Amette (F4K)"
+description: "All services from a docker compose file published under a single Docker Hub repository, with service tagged using its name."
+branding:
+  icon: "arrow-right-circle"
+  color: "red"
+inputs:
+  docker_compose_files:
+    description: "Docker-compose files to use (space-separated, e.g., 'docker-compose.yml docker-compose.ci.yml'). The action will automatically add -f flags."
+    required: false
+    default: 'docker-compose.yml'
+  docker_hub_username:
+    description: "Docker Hub username (required for pushing to Docker Hub)"
+    required: true
+  docker_hub_personal_token:
+    description: "Docker Hub Personal Access Token (used for README updates, and as fallback for pushing images if docker_hub_org_token is not provided)"
+    required: false
+    default: ''
+  docker_hub_org_token:
+    description: "Docker Hub organization/user access token or password (optional, defaults to docker_hub_personal_token if not provided)"
+    required: false
+    default: ''
+  docker_hub_org_name:
+    description: "Docker Hub organization/namespace name (optional, defaults to docker_hub_username)"
+    required: false
+    default: ''
+  docker_hub_repository:
+    description: "Docker Hub repository name. Can be full path (org/repo-name) or just repo-name. If not provided, uses GitHub repository name."
+    required: false
+    default: ''
+  update_readme:
+    description: "Enable updating Docker Hub repository README (optional, defaults to false)"
+    required: false
+    default: 'false'
+  readme_path:
+    description: "Path to the markdown file to use as Docker Hub README (optional, defaults to ./README.md)"
+    required: false
+    default: './README.md'
+runs:
+  using: "composite"
+  steps:
+    - name: Determine Docker Hub token
+      id: docker_token
+      run: |
+        # Use org token if provided, otherwise fall back to personal token
+        if [ -n "${{ inputs.docker_hub_org_token }}" ]; then
+          DOCKER_TOKEN="${{ inputs.docker_hub_org_token }}"
+        elif [ -n "${{ inputs.docker_hub_personal_token }}" ]; then
+          DOCKER_TOKEN="${{ inputs.docker_hub_personal_token }}"
+        else
+          echo "Error: Either docker_hub_org_token or docker_hub_personal_token must be provided"
+          exit 1
+        fi
+        echo "token=$DOCKER_TOKEN" >> $GITHUB_OUTPUT
+      shell: bash
+    - name: Determine Docker Hub organization name
+      id: docker_org
+      run: |
+        # Determine organization/namespace name (default to username if not provided)
+        if [ -n "${{ inputs.docker_hub_org_name }}" ]; then
+          DOCKER_HUB_ORG="${{ inputs.docker_hub_org_name }}"
+        else
+          DOCKER_HUB_ORG="${{ inputs.docker_hub_username }}"
+        fi
+        # Convert to lowercase (Docker Hub requirement)
+        DOCKER_HUB_ORG=$(echo "$DOCKER_HUB_ORG" | tr '[:upper:]' '[:lower:]')
+        echo "org=$DOCKER_HUB_ORG" >> $GITHUB_OUTPUT
+      shell: bash
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ steps.docker_org.outputs.org }}
+        password: ${{ steps.docker_token.outputs.token }}
+        registry: docker.io
+    - name: Determine Docker Hub repository name
+      id: repo_name
+      run: |
+        # Use the organization name from previous step
+        DOCKER_HUB_ORG="${{ steps.docker_org.outputs.org }}"
+        
+        # Determine repository name
+        if [ -n "${{ inputs.docker_hub_repository }}" ]; then
+          REPO_INPUT="${{ inputs.docker_hub_repository }}"
+          # Check if it already contains a slash (full path provided)
+          if echo "$REPO_INPUT" | grep -q '/'; then
+            DOCKER_HUB_REPO="$REPO_INPUT"
+          else
+            # Just repo name provided, prepend org
+            DOCKER_HUB_REPO="${DOCKER_HUB_ORG}/${REPO_INPUT}"
+          fi
+        else
+          # Use GitHub repository name but replace org part with Docker Hub org
+          GITHUB_REPO="${{ github.repository }}"
+          REPO_NAME=$(echo "$GITHUB_REPO" | cut -d'/' -f2)
+          DOCKER_HUB_REPO="${DOCKER_HUB_ORG}/${REPO_NAME}"
+        fi
+        
+        # Convert repository name to lowercase (Docker Hub requirement)
+        DOCKER_HUB_REPO=$(echo "$DOCKER_HUB_REPO" | tr '[:upper:]' '[:lower:]')
+        
+        echo "Using Docker Hub organization: $DOCKER_HUB_ORG"
+        echo "Using Docker Hub repository: $DOCKER_HUB_REPO"
+        echo "docker_hub_repo=$DOCKER_HUB_REPO" >> $GITHUB_OUTPUT
+      shell: bash
+    - name: Process docker-compose files
+      id: compose_files
+      run: |
+        # Convert space-separated file names to -f flags
+        # Handle both formats: "file1.yml file2.yml" or "-f file1.yml -f file2.yml"
+        FILES="${{ inputs.docker_compose_files }}"
+        
+        # If it already starts with -f, use as is, otherwise add -f to each file
+        if echo "$FILES" | grep -q "^-f"; then
+          COMPOSE_FILES="$FILES"
+        else
+          # Split by spaces and add -f to each file
+          COMPOSE_FILES=""
+          for FILE in $FILES; do
+            if [ -n "$COMPOSE_FILES" ]; then
+              COMPOSE_FILES="$COMPOSE_FILES -f $FILE"
+            else
+              COMPOSE_FILES="-f $FILE"
+            fi
+          done
+        fi
+        
+        echo "Using docker-compose files: $COMPOSE_FILES"
+        echo "compose_files=$COMPOSE_FILES" >> $GITHUB_OUTPUT
+      shell: bash
+    - name: Parse docker-compose services
+      id: parse_services
+      run: |
+        set -e
+        SERVICES=$(docker compose ${{ steps.compose_files.outputs.compose_files }} config --services)
+        echo "Found services: $SERVICES"
+        echo "services<<EOF" >> $GITHUB_OUTPUT
+        echo "$SERVICES" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+      shell: bash
+    - name: Get project name
+      id: project_name
+      run: |
+        PROJECT_NAME=$(docker compose ${{ steps.compose_files.outputs.compose_files }} config --format json 2>/dev/null | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4 || basename "$(pwd)" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-')
+        echo "Project name: $PROJECT_NAME"
+        echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
+      shell: bash
+    - name: Build services
+      run: |
+        echo "Building all services..."
+        docker compose ${{ steps.compose_files.outputs.compose_files }} build
+        echo "Build completed successfully"
+      shell: bash
+    - name: Tag and push services
+      run: |
+        set -e
+        
+        DOCKER_HUB_REPO="${{ steps.repo_name.outputs.docker_hub_repo }}"
+        PROJECT_NAME="${{ steps.project_name.outputs.project_name }}"
+        SERVICES="${{ steps.parse_services.outputs.services }}"
+        
+        # For each service, tag and push to Docker Hub
+        for SERVICE in $SERVICES; do
+          echo "::group::Processing service: $SERVICE"
+          
+          IMAGE_NAME=""
+          
+          # Method 1: Try to get image name from docker compose images command (most reliable after build)
+          COMPOSE_IMAGES_OUTPUT=$(docker compose ${{ steps.compose_files.outputs.compose_files }} images "$SERVICE" 2>/dev/null || echo "")
+          
+          if [ -n "$COMPOSE_IMAGES_OUTPUT" ]; then
+            # Extract image name from the output (format: project_service  latest  <image-id>)
+            IMAGE_NAME=$(echo "$COMPOSE_IMAGES_OUTPUT" | grep -v "CONTAINER" | grep -v "^$" | awk 'NR>1 {print $1":"$2; exit}' | head -1 || echo "")
+            # If no tag found, try just repository name
+            if [ -z "$IMAGE_NAME" ] || [ "$IMAGE_NAME" = ":" ]; then
+              IMAGE_NAME=$(echo "$COMPOSE_IMAGES_OUTPUT" | grep -v "CONTAINER" | grep -v "^$" | awk 'NR>1 {print $1; exit}' | head -1 || echo "")
+            fi
+          fi
+          
+          # Method 2: Try to get from compose config (if image is explicitly set)
+          if [ -z "$IMAGE_NAME" ] || [ "$IMAGE_NAME" = "null" ]; then
+            IMAGE_NAME=$(docker compose ${{ steps.compose_files.outputs.compose_files }} config 2>/dev/null | grep -A 30 "^  $SERVICE:" | grep -E "^\s+image:" | head -1 | sed 's/.*image:[[:space:]]*//' | tr -d '"' | xargs || echo "")
+          fi
+          
+          # Method 3: Try default docker compose naming patterns
+          if [ -z "$IMAGE_NAME" ] || [ "$IMAGE_NAME" = "null" ]; then
+            # Try common patterns: project-service:latest, project_service:latest
+            for PATTERN in "${PROJECT_NAME}-${SERVICE}:latest" "${PROJECT_NAME}_${SERVICE}:latest" "${PROJECT_NAME}-${SERVICE}" "${PROJECT_NAME}_${SERVICE}"; do
+              if docker image inspect "$PATTERN" >/dev/null 2>&1; then
+                IMAGE_NAME="$PATTERN"
+                break
+              fi
+            done
+          fi
+          
+          # Method 4: Search all images for one matching the service name
+          if [ -z "$IMAGE_NAME" ] || [ "$IMAGE_NAME" = "null" ]; then
+            echo "Searching for image containing service name: $SERVICE"
+            IMAGE_NAME=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -iE "(^|/)$SERVICE(:|$)" | head -1 || echo "")
+          fi
+          
+          # Verify the image exists
+          if [ -z "$IMAGE_NAME" ] || [ "$IMAGE_NAME" = "null" ]; then
+            echo "Error: Could not determine image name for service $SERVICE"
+            echo "Available images:"
+            docker images
+            exit 1
+          fi
+          
+          # Verify image actually exists
+          if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+            echo "Error: Image $IMAGE_NAME does not exist"
+            echo "Available images:"
+            docker images
+            exit 1
+          fi
+          
+          echo "Found image: $IMAGE_NAME"
+          
+          # Tag the image for Docker Hub
+          DOCKER_HUB_IMAGE="${DOCKER_HUB_REPO}:${SERVICE}"
+          echo "Tagging $IMAGE_NAME as $DOCKER_HUB_IMAGE"
+          docker tag "$IMAGE_NAME" "$DOCKER_HUB_IMAGE"
+          
+          # Push to Docker Hub
+          echo "Pushing $DOCKER_HUB_IMAGE to Docker Hub..."
+          docker push "$DOCKER_HUB_IMAGE"
+          
+          echo "Successfully pushed $DOCKER_HUB_IMAGE"
+          echo "::endgroup::"
+        done
+        
+        echo "All services have been built and pushed to Docker Hub"
+      shell: bash
+    - name: Update Docker Hub README
+      if: inputs.update_readme == 'true' && inputs.docker_hub_personal_token != '' && inputs.docker_hub_username != ''
+      uses: peter-evans/dockerhub-description@v3
+      with:
+        username: ${{ inputs.docker_hub_username }}
+        password: ${{ inputs.docker_hub_personal_token }}
+        repository: ${{ steps.repo_name.outputs.docker_hub_repo }}
+        readme-filepath: ${{ inputs.readme_path }}
+

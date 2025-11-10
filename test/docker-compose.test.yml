@@ -1,0 +1,19 @@
+services:
+  test-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    image: test-web:latest
+  
+  test-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    image: test-api:latest
+  
+  test-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    image: test-worker:latest
+

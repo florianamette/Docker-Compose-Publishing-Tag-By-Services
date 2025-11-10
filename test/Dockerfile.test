@@ -1,0 +1,8 @@
+# Simple test Dockerfile
+FROM alpine:latest
+
+# Add a simple test file
+RUN echo "Test service built at $(date)" > /test.txt
+
+CMD ["sh", "-c", "cat /test.txt && sleep infinity"]
+

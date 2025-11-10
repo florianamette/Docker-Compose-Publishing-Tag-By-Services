@@ -1,0 +1,28 @@
+name: Test Personal Account (Fallback)
+
+on:
+  push:
+    branches: [main, test]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # Manual trigger only
+
+jobs:
+  test-personal:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Test with Personal Account (Fallback)
+        uses: ./
+        with:
+          # Personal account example: only username and personal_token needed
+          # docker_hub_org_token will fallback to docker_hub_personal_token
+          # docker_hub_org_name will fallback to docker_hub_username
+          docker_hub_username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          docker_hub_personal_token: ${{ secrets.DOCKER_HUB_PERSONAL_TOKEN }}
+          docker_compose_files: 'test/docker-compose.test.yml'
+          docker_hub_repository: ${{ secrets.DOCKER_HUB_TEST_REPOSITORY || github.repository }}
+          update_readme: 'false'
+

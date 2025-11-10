@@ -1,0 +1,28 @@
+name: Test Organization (with org_name)
+
+on:
+  push:
+    branches: [main, test]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # Manual trigger only
+
+jobs:
+  test-organization:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Test with Organization Name
+        uses: ./
+        with:
+          # Organization example: explicitly using docker_hub_org_name
+          # This demonstrates using a different organization/namespace than the username
+          docker_hub_username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          docker_hub_org_name: ${{ secrets.DOCKER_HUB_ORG_NAME }}
+          docker_hub_org_token: ${{ secrets.DOCKER_HUB_ORG_TOKEN }}
+          docker_compose_files: 'test/docker-compose.test.yml'
+          docker_hub_repository: ${{ secrets.DOCKER_HUB_TEST_REPOSITORY || github.repository }}
+          update_readme: 'false'
+

@@ -1,5 +1,5 @@
 # action.yml
-name: "Docker Compose Publish & Auto Tagging"
+name: "Docker Compose Publishing Tag By Services"
 author: "Florian Amette (F4K)"
 description: "All services from a docker compose file published under a single Docker Hub repository, with service tagged using its name."
 branding:

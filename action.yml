@@ -224,7 +224,15 @@ runs:
             exit 1
           fi
           if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
-            echo "Error: Image $IMAGE_NAME does not exist"
+            echo "Warning: Image $IMAGE_NAME does not exist locally"
+            echo "Checking if this is an external image that should be skipped..."
+            HAS_BUILD=$(docker compose ${{ steps.compose_files.outputs.compose_files }} config 2>/dev/null | grep -A 50 "^  $SERVICE:" | grep -E "^\s+build:" | head -1 || echo "")
+            if [ -z "$HAS_BUILD" ]; then
+              echo "Service '$SERVICE' uses external image '$IMAGE_NAME' without build configuration - skipping"
+              echo "::endgroup::"
+              continue
+            fi
+            echo "Error: Image $IMAGE_NAME does not exist and service has build configuration"
             echo "Available images:"
             docker images
             exit 1
